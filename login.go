@@ -1,15 +1,10 @@
 package main
 
 import (
-	"context"
-	corev1 "murmur/gen/core"
-	foundationv1 "murmur/gen/foundation"
-	"net"
+	"murmur/client"
 
 	"github.com/diamondburned/handy"
 	"github.com/gotk3/gotk3/gtk"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/metadata"
 )
 
 func DecideLogin() {
@@ -41,46 +36,21 @@ func DecideLogin() {
 	loginButton := NewButton()
 	loginButton.SetLabel("Login")
 	loginButton.Connect("clicked", func() {
-		conn, err := grpc.Dial("localhost:2289", grpc.WithInsecure(), grpc.WithContextDialer(func(c context.Context, s string) (net.Conn, error) {
-			netConn, err := net.Dial("tcp", s)
-			if err != nil {
-				return nil, err
-			}
-
-			return netConn, nil
-		}))
+		cli, err := client.NewClient(TextOf(homeserverEntry), TextOf(emailEntry), TextOf(passwordEntry))
 		if err != nil {
 			panic(err)
 		}
 
-		c := corev1.NewCoreServiceClient(conn)
-		f := foundationv1.NewFoundationServiceClient(conn)
-
-		println("Logging in...")
-		session, err := f.Login(context.Background(), &foundationv1.LoginRequest{
-			Login: &foundationv1.LoginRequest_Local_{
-				Local: &foundationv1.LoginRequest_Local{
-					Email:    TextOf(emailEntry),
-					Password: []byte(TextOf(passwordEntry)),
-				},
-			},
-		})
+		guilds, err := cli.GuildList()
 		if err != nil {
 			panic(err)
 		}
 
-		ctx := context.Background()
-		ctx = metadata.AppendToOutgoingContext(ctx, "auth", session.SessionToken)
-
-		println("Obtaining guild list...")
-		list, err := c.GetGuildList(ctx, &corev1.GetGuildListRequest{})
-		if err != nil {
-			panic(err)
+		guildPage := NewPage()
+		for _, guild := range guilds {
+			guildPage.Add(NewLabel(guild.Name))
 		}
-
-		for _, guild := range list.Guilds {
-			println(guild.GuildId)
-		}
+		MainWindow.Replace(guildPage)
 	})
 	box.Add(loginButton)
 
